@@ -4,7 +4,8 @@ use sui::balance::{Self, Balance};
 use sui::coin::{Self, TreasuryCap};
 use sui::coin_registry::{CurrencyInitializer, MetadataCap};
 use sui::derived_object;
-use sui::table::Table;
+use sui::package;
+use sui::table::{Self, Table};
 use std::type_name::{Self, TypeName};
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
@@ -19,6 +20,9 @@ const EAccessDenied: u64 = 3;
 const EInvalidTotalFee: u64 = 4;
 const ENotEnoughBalance: u64 = 5;
 const EDepositLockAmountIsNotZero: u64 = 6;
+
+// OTW
+public struct FEE_TOKEN has drop {}
 
 // Registry
 public struct FeeTokenRegistry has key {
@@ -83,6 +87,17 @@ public struct DepositFeeTokenEvent has copy, drop {
     token_owner: address,
     amount: u64,
     fee: u64,
+}
+
+// Init method
+fun init(otw: FEE_TOKEN, ctx: &mut TxContext) {
+    package::claim_and_keep(otw, ctx);
+
+    let registry = FeeTokenRegistry { 
+        id: object::new(ctx),
+        policies: table::new(ctx) 
+    };
+    transfer::share_object(registry);
 }
 
 // Public methods
