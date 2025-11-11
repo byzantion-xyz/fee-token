@@ -245,9 +245,9 @@ public fun deposit<FT>(token: &mut FeeToken<FT>, mut balance: Balance<FT>, lock:
 
     if (lock.include_fee) {
         policy.fees.keys().do_mut!(|receiver| {
-            let balance = balance.split(((amount as u128) * (*policy.fees.get(receiver) as u128) / DENOMINATOR) as u64);
-            fee = fee + balance.value();
-            policy.balances.get_mut(receiver).join(balance);
+            let fee_balance = balance.split(((amount as u128) * (*policy.fees.get(receiver) as u128) / DENOMINATOR) as u64);
+            fee = fee + fee_balance.value();
+            policy.balances.get_mut(receiver).join(fee_balance);
         });
     };
 
