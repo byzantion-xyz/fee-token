@@ -34,6 +34,7 @@ public struct FeeTokenRegistry has key {
 public struct FeeTokenPolicy<phantom FT> has key {
     id: UID,
     total_fee: u64,
+    allowlist: Table<address, bool>,
     fees: VecMap<address, u64>,
     balances: VecMap<address, Balance<FT>>,
 }
@@ -109,6 +110,7 @@ public fun register<FT>(
     let policy = FeeTokenPolicy<FT> {
         id: object::new(ctx),
         total_fee: 0,
+        allowlist: table::new(ctx),
         fees: vec_map::empty(),
         balances: vec_map::empty()
     };
@@ -177,6 +179,30 @@ public fun remove_fee<FT>(
 
     let (_, old_fee) = policy.fees.remove(&receiver);
     policy.total_fee = policy.total_fee - old_fee;
+}
+
+public fun add_to_allowlist<FT>(
+    policy: &mut FeeTokenPolicy<FT>,
+    cap: &FeeTokenPolicyCap<FT>,
+    receiver: address 
+) {
+    assert!(object::id(policy) == cap.policy_id, EAccessDenied);
+
+    if (!policy.allowlist.contains(receiver)) {
+        policy.allowlist.add(receiver, true);
+    };
+}
+
+public fun remove_from_allowlist<FT>(
+    policy: &mut FeeTokenPolicy<FT>,
+    cap: &FeeTokenPolicyCap<FT>,
+    receiver: address 
+) {
+    assert!(object::id(policy) == cap.policy_id, EAccessDenied);
+
+    if (policy.allowlist.contains(receiver)) {
+        policy.allowlist.remove(receiver);
+    };
 }
 
 public fun withdraw_fee<FT>(
@@ -258,7 +284,7 @@ public fun deposit<FT>(token: &mut FeeToken<FT>, mut balance: Balance<FT>, lock:
     let amount = balance.value();
     let mut fee: u64 = 0;
 
-    if (lock.include_fee) {
+    if (!policy.allowlist.contains(token.owner) || lock.include_fee) {
         policy.fees.keys().do_mut!(|receiver| {
             let fee_balance = balance.split(((amount as u128) * (*policy.fees.get(receiver) as u128) / DENOMINATOR) as u64);
             fee = fee + fee_balance.value();
