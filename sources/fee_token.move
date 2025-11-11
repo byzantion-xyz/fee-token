@@ -14,7 +14,7 @@ use sui::vec_map::{Self, VecMap};
 const DENOMINATOR: u128 = 10000;
 
 // Errors
-const EAlredyRegistered: u64 = 1;
+const EAlreadyRegistered: u64 = 1;
 const ETreasuryCapSupplyIsNotZero: u64 = 2;
 const EAccessDenied: u64 = 3;
 const EInvalidTotalFee: u64 = 4;
@@ -93,9 +93,9 @@ public struct DepositFeeTokenEvent has copy, drop {
 fun init(otw: FEE_TOKEN, ctx: &mut TxContext) {
     package::claim_and_keep(otw, ctx);
 
-    let registry = FeeTokenRegistry { 
+    let registry = FeeTokenRegistry {
         id: object::new(ctx),
-        policies: table::new(ctx) 
+        policies: table::new(ctx)
     };
     transfer::share_object(registry);
 }
@@ -120,7 +120,7 @@ public fun register<FT>(
 
     let token_type = type_name::with_defining_ids<FT>();
 
-    assert!(!registry.policies.contains(token_type), EAlredyRegistered);
+    assert!(!registry.policies.contains(token_type), EAlreadyRegistered);
     registry.policies.add(token_type, object::id(&policy));
 
     (policy, cap)
