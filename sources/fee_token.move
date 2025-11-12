@@ -182,7 +182,7 @@ public fun withdraw_fee<FT>(token: &mut FeeToken<FT>, policy: &mut FeeTokenPolic
     };
 }
 
-public fun set_fee_mode<FT>(token: &mut FeeToken<FT>, fee_mode: u64, policy: &mut FeeTokenPolicy<FT>, cap: &FeeTokenPolicyCap<FT>,) {
+public fun set_fee_mode<FT>(token: &mut FeeToken<FT>, fee_mode: u64, policy: &mut FeeTokenPolicy<FT>, cap: &FeeTokenPolicyCap<FT>) {
     assert!(object::id(policy) == cap.policy_id, EAccessDenied);
     assert!(fee_mode < 3, EInvalidFeeMode);
 
