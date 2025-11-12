@@ -30,17 +30,17 @@ Central registry that tracks all registered fee token policies. Created and shar
 
 ### 3. FeeTokenPolicy
 Manages fee configuration for a specific token type:
+- Fee modes table for fee-exempt addresses
 - Total fee percentage (up to 100%)
 - Individual fee recipients and their percentages
 - Balance tracking for fee recipients
-- Allowlist table for fee-exempt addresses
 
 ### 4. FeeToken
 The actual token object containing:
 - Unique derived ID
+- Fee mode
 - Owner address
 - Token balance
-- Fee mode configuration
 
 ### 5. DepositLock
 Ensures atomic deposit operations with proper fee calculations.

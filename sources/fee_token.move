@@ -34,6 +34,7 @@ public struct FeeTokenRegistry has key {
 // Policy
 public struct FeeTokenPolicy<phantom FT> has key {
     id: UID,
+    fee_modes: Table<address, u64>,
     total_fee: u64,
     fees: VecMap<address, u64>,
     balances: VecMap<address, Balance<FT>>,
@@ -47,9 +48,9 @@ public struct FeeTokenPolicyCap<phantom FT> has key, store {
 // Fee Token
 public struct FeeToken<phantom FT> has key {
     id: UID,
+    fee_mode: u64,
     owner: address,
     balance: Balance<FT>,
-    fee_mode: u64,
 }
 
 public struct FeeTokenKey<phantom FT> has copy, drop, store {
@@ -106,6 +107,7 @@ fun init(otw: FEE_TOKEN, ctx: &mut TxContext) {
 public fun register<FT>(registry: &mut FeeTokenRegistry, _intlzr: &CurrencyInitializer<FT>, ctx: &mut TxContext): (FeeTokenPolicy<FT>, FeeTokenPolicyCap<FT>) {
     let policy = FeeTokenPolicy<FT> {
         id: object::new(ctx),
+        fee_modes: table::new(ctx),
         total_fee: 0,
         fees: vec_map::empty(),
         balances: vec_map::empty()
@@ -182,17 +184,25 @@ public fun withdraw_fee<FT>(token: &mut FeeToken<FT>, policy: &mut FeeTokenPolic
 
 public fun set_fee_mode<FT>(token: &mut FeeToken<FT>, fee_mode: u64, policy: &mut FeeTokenPolicy<FT>, cap: &FeeTokenPolicyCap<FT>,) {
     assert!(object::id(policy) == cap.policy_id, EAccessDenied);
-
     assert!(fee_mode < 3, EInvalidFeeMode);
+
+    if (policy.fee_modes.contains(token.owner)) {
+        policy.fee_modes.remove(token.owner);
+    };
+
+    if (fee_mode > 0) {
+        policy.fee_modes.add(token.owner, fee_mode);
+    };
+
     token.fee_mode = fee_mode;
 }
 
 public fun new<FT>(registry: &mut FeeTokenRegistry, owner: address, ctx: &mut TxContext): FeeToken<FT> {
     let token = FeeToken<FT> {
         id: derived_object::claim(&mut registry.id, FeeTokenKey<FT> { owner }),
+        fee_mode: 0,
         owner,
         balance: balance::zero<FT>(),
-        fee_mode: 0
     };
 
     let ref = FeeTokenRef {
