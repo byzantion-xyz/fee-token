@@ -9,6 +9,7 @@ The Fee Token module provides a comprehensive system for creating and managing t
 - Automatic fee distribution to multiple recipients
 - Secure token management with access controls
 - Deposit/withdrawal operations with automatic fee deduction
+- Allowlist functionality to exempt specific addresses from fees
 
 ## Features
 
@@ -17,35 +18,42 @@ The Fee Token module provides a comprehensive system for creating and managing t
 - **Lock mechanism**: Ensures proper handling of deposits and withdrawals with fee calculations
 - **Event emission**: Comprehensive event logging for all major operations
 - **Access control**: Policy-based management with capability objects
+- **Allowlist system**: Exempt specific addresses from fee deductions
 
 ## Core Components
 
-### 1. FeeTokenRegistry
-Central registry that tracks all registered fee token policies.
+### 1. FEE_TOKEN (OTW)
+One-time witness struct used for module initialization and package claims.
 
-### 2. FeeTokenPolicy
+### 2. FeeTokenRegistry
+Central registry that tracks all registered fee token policies. Created and shared during module initialization.
+
+### 3. FeeTokenPolicy
 Manages fee configuration for a specific token type:
 - Total fee percentage (up to 100%)
 - Individual fee recipients and their percentages
 - Balance tracking for fee recipients
+- Allowlist table for fee-exempt addresses
 
-### 3. FeeToken
+### 4. FeeToken
 The actual token object containing:
 - Unique derived ID
 - Owner address
 - Token balance
+- Fee mode configuration
 
-### 4. DepositLock
+### 5. DepositLock
 Ensures atomic deposit operations with proper fee calculations.
 
 ## Error Codes
 
-- `EAlredyRegistered` (1): Token type already registered
+- `EAlreadyRegistered` (1): Token type already registered
 - `ETreasuryCapSupplyIsNotZero` (2): Treasury cap must have zero supply before minting
 - `EAccessDenied` (3): Unauthorized access attempt
-- `EInvalidTotalFee` (4): Total fees exceed 100%
-- `ENotEnoughBalance` (5): Insufficient token balance
-- `EDepositLockAmountIsNotZero` (6): Lock must be fully consumed
+- `EInvalidFeeMode` (4): Invalid fee mode
+- `EInvalidTotalFee` (5): Total fees exceed 100%
+- `ENotEnoughBalance` (6): Insufficient token balance
+- `EDepositLockAmountIsNotZero` (7): Lock must be fully consumed
 
 ## Events
 

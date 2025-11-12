@@ -17,9 +17,10 @@ const DENOMINATOR: u128 = 10000;
 const EAlreadyRegistered: u64 = 1;
 const ETreasuryCapSupplyIsNotZero: u64 = 2;
 const EAccessDenied: u64 = 3;
-const EInvalidTotalFee: u64 = 4;
-const ENotEnoughBalance: u64 = 5;
-const EDepositLockAmountIsNotZero: u64 = 6;
+const EInvalidFeeMode: u64 = 4;
+const EInvalidTotalFee: u64 = 5;
+const ENotEnoughBalance: u64 = 6;
+const EDepositLockAmountIsNotZero: u64 = 7;
 
 // OTW
 public struct FEE_TOKEN has drop {}
@@ -34,7 +35,6 @@ public struct FeeTokenRegistry has key {
 public struct FeeTokenPolicy<phantom FT> has key {
     id: UID,
     total_fee: u64,
-    allowlists: Table<address, bool>,
     fees: VecMap<address, u64>,
     balances: VecMap<address, Balance<FT>>,
 }
@@ -49,6 +49,7 @@ public struct FeeToken<phantom FT> has key {
     id: UID,
     owner: address,
     balance: Balance<FT>,
+    fee_mode: u64,
 }
 
 public struct FeeTokenKey<phantom FT> has copy, drop, store {
@@ -102,15 +103,10 @@ fun init(otw: FEE_TOKEN, ctx: &mut TxContext) {
 }
 
 // Public methods
-public fun register<FT>(
-    registry: &mut FeeTokenRegistry,
-    _intlzr: &CurrencyInitializer<FT>,
-    ctx: &mut TxContext
-): (FeeTokenPolicy<FT>, FeeTokenPolicyCap<FT>) {
+public fun register<FT>(registry: &mut FeeTokenRegistry, _intlzr: &CurrencyInitializer<FT>, ctx: &mut TxContext): (FeeTokenPolicy<FT>, FeeTokenPolicyCap<FT>) {
     let policy = FeeTokenPolicy<FT> {
         id: object::new(ctx),
         total_fee: 0,
-        allowlists: table::new(ctx),
         fees: vec_map::empty(),
         balances: vec_map::empty()
     };
@@ -147,12 +143,7 @@ public fun mint<FT>(
     (balance, DepositLock<FT> { amount: supply, include_fee: false }, metadata_cap)
 }
 
-public fun add_fee<FT>(
-    policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
-    receiver: address,
-    fee: u64
-) {
+public fun add_fee<FT>(policy: &mut FeeTokenPolicy<FT>, cap: &FeeTokenPolicyCap<FT>, receiver: address, fee: u64) {
     assert!(object::id(policy) == cap.policy_id, EAccessDenied);
 
     if (policy.fees.contains(&receiver)) {
@@ -170,45 +161,14 @@ public fun add_fee<FT>(
     };
 }
 
-public fun remove_fee<FT>(
-    policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
-    receiver: address
-) {
+public fun remove_fee<FT>(policy: &mut FeeTokenPolicy<FT>, cap: &FeeTokenPolicyCap<FT>, receiver: address) {
     assert!(object::id(policy) == cap.policy_id, EAccessDenied);
 
     let (_, old_fee) = policy.fees.remove(&receiver);
     policy.total_fee = policy.total_fee - old_fee;
 }
 
-public fun add_allowlist<FT>(
-    policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
-    receiver: address
-) {
-    assert!(object::id(policy) == cap.policy_id, EAccessDenied);
-
-    if (!policy.allowlists.contains(receiver)) {
-        policy.allowlists.add(receiver, true);
-    };
-}
-
-public fun remove_allowlist<FT>(
-    policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
-    receiver: address
-) {
-    assert!(object::id(policy) == cap.policy_id, EAccessDenied);
-
-    if (policy.allowlists.contains(receiver)) {
-        policy.allowlists.remove(receiver);
-    };
-}
-
-public fun withdraw_fee<FT>(
-    token: &mut FeeToken<FT>,
-    policy: &mut FeeTokenPolicy<FT>
-) {
+public fun withdraw_fee<FT>(token: &mut FeeToken<FT>, policy: &mut FeeTokenPolicy<FT>) {
     if (policy.balances.contains(&token.owner)) {
         let balance = policy.balances.get_mut(&token.owner).withdraw_all();
         token.balance.join(balance);
@@ -220,11 +180,19 @@ public fun withdraw_fee<FT>(
     };
 }
 
+public fun set_fee_mode<FT>(token: &mut FeeToken<FT>, fee_mode: u64, policy: &mut FeeTokenPolicy<FT>, cap: &FeeTokenPolicyCap<FT>,) {
+    assert!(object::id(policy) == cap.policy_id, EAccessDenied);
+
+    assert!(fee_mode < 3, EInvalidFeeMode);
+    token.fee_mode = fee_mode;
+}
+
 public fun new<FT>(registry: &mut FeeTokenRegistry, owner: address, ctx: &mut TxContext): FeeToken<FT> {
     let token = FeeToken<FT> {
         id: derived_object::claim(&mut registry.id, FeeTokenKey<FT> { owner }),
         owner,
-        balance: balance::zero<FT>()
+        balance: balance::zero<FT>(),
+        fee_mode: 0
     };
 
     let ref = FeeTokenRef {
@@ -261,7 +229,7 @@ public fun withdraw_from_address<FT>(token: &mut FeeToken<FT>, amount: u64, ctx:
         amount,
     });
 
-    (balance, DepositLock<FT> { amount, include_fee: true })
+    (balance, DepositLock<FT> { amount, include_fee: (token.fee_mode < 2) })
 }
 
 public fun withdraw_from_object<FT>(token: &mut FeeToken<FT>, object: &UID, amount: u64): (Balance<FT>, DepositLock<FT>) {
@@ -277,23 +245,22 @@ public fun withdraw_from_object<FT>(token: &mut FeeToken<FT>, object: &UID, amou
         amount,
     });
 
-    (balance, DepositLock<FT> { amount, include_fee: true })
+    (balance, DepositLock<FT> { amount, include_fee: (token.fee_mode < 2) })
 }
 
 public fun deposit<FT>(token: &mut FeeToken<FT>, mut balance: Balance<FT>, lock: &mut DepositLock<FT>, policy: &mut FeeTokenPolicy<FT>) {
     let amount = balance.value();
     let mut fee: u64 = 0;
 
-    if (!policy.allowlists.contains(token.owner) || lock.include_fee) {
+    if (lock.include_fee && token.fee_mode == 0) {
         policy.fees.keys().do_mut!(|receiver| {
             let fee_balance = balance.split(((amount as u128) * (*policy.fees.get(receiver) as u128) / DENOMINATOR) as u64);
             fee = fee + fee_balance.value();
             policy.balances.get_mut(receiver).join(fee_balance);
         });
     };
-
-    token.balance.join(balance);
     lock.amount = lock.amount - amount;
+    token.balance.join(balance);
 
     emit(DepositFeeTokenEvent {
         token_type: type_name::with_defining_ids<FT>(),
