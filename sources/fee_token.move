@@ -25,6 +25,11 @@ const EDepositLockAmountIsNotZero: u64 = 7;
 // OTW
 public struct FEE_TOKEN has drop {}
 
+// Initializer
+public struct FeeTokenInitializer<phantom FT> {
+    initializer: CurrencyInitializer<FT>
+}
+
 // Registry
 public struct FeeTokenRegistry has key {
     id: UID,
@@ -105,11 +110,13 @@ fun init(otw: FEE_TOKEN, ctx: &mut TxContext) {
 }
 
 // Public methods
-public fun register<FT>(
+public fun init_fee_token_currency<FT>(
     registry: &mut FeeTokenRegistry,
-    _initializer: &CurrencyInitializer<FT>,
+    initializer: CurrencyInitializer<FT>,
     ctx: &mut TxContext,
-): (FeeTokenPolicy<FT>, FeeTokenPolicyCap<FT>) {
+): (FeeTokenInitializer<FT>, FeeTokenPolicy<FT>, FeeTokenPolicyCap<FT>) {
+    let initializer = FeeTokenInitializer { initializer };
+
     let policy = FeeTokenPolicy<FT> {
         id: object::new(ctx),
         fee_modes: table::new(ctx),
@@ -128,26 +135,35 @@ public fun register<FT>(
     assert!(!registry.policies.contains(token_type), EAlreadyRegistered);
     registry.policies.add(token_type, object::id(&policy));
 
-    (policy, cap)
+    (initializer, policy, cap)
 }
 
-public fun mint<FT>(
-    policy: FeeTokenPolicy<FT>,
-    supply: u64,
-    mut initializer: CurrencyInitializer<FT>,
+public fun mint_fee_token_balance<FT>(
+    initializer: &mut FeeTokenInitializer<FT>,
     mut cap: TreasuryCap<FT>,
-    ctx: &mut TxContext,
-): (Balance<FT>, DepositLock<FT>, MetadataCap<FT>) {
-    transfer::share_object(policy);
-
+    supply: u64,
+    _ctx: &mut TxContext,
+): (Balance<FT>, DepositLock<FT>) {
     assert!(cap.total_supply() == 0, ETreasuryCapSupplyIsNotZero);
 
     let balance = cap.mint_balance(supply);
+    initializer.initializer.make_supply_burn_only(cap);
 
-    initializer.make_supply_burn_only(cap);
-    let metadata_cap = initializer.finalize(ctx);
+    (balance, DepositLock { amount: supply, include_fee: false })
+}
 
-    (balance, DepositLock<FT> { amount: supply, include_fee: false }, metadata_cap)
+public fun finalize_fee_token_currency<FT>(
+    initializer: FeeTokenInitializer<FT>,
+    policy: FeeTokenPolicy<FT>,
+    ctx: &mut TxContext,
+): MetadataCap<FT> {
+    transfer::share_object(policy);
+
+    let FeeTokenInitializer {
+        initializer
+    } = initializer;
+
+    initializer.finalize(ctx)
 }
 
 public fun add_fee<FT>(
@@ -196,26 +212,6 @@ public fun withdraw_fee<FT>(token: &mut FeeToken<FT>, policy: &mut FeeTokenPolic
     };
 }
 
-public fun set_fee_mode<FT>(
-    token: &mut FeeToken<FT>,
-    fee_mode: u64,
-    policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
-) {
-    assert!(policy.id.to_inner() == cap.policy_id, EAccessDenied);
-    assert!(fee_mode < 3, EInvalidFeeMode);
-
-    if (policy.fee_modes.contains(token.owner)) {
-        policy.fee_modes.remove(token.owner);
-    };
-
-    if (fee_mode > 0) {
-        policy.fee_modes.add(token.owner, fee_mode);
-    };
-
-    token.fee_mode = fee_mode;
-}
-
 public fun new<FT>(
     registry: &mut FeeTokenRegistry,
     owner: address,
@@ -239,6 +235,26 @@ public fun new<FT>(
     });
 
     token
+}
+
+public fun set_fee_mode<FT>(
+    token: &mut FeeToken<FT>,
+    policy: &mut FeeTokenPolicy<FT>,
+    cap: &FeeTokenPolicyCap<FT>,
+    fee_mode: u64,
+) {
+    assert!(policy.id.to_inner() == cap.policy_id, EAccessDenied);
+    assert!(fee_mode < 3, EInvalidFeeMode);
+
+    if (policy.fee_modes.contains(token.owner)) {
+        policy.fee_modes.remove(token.owner);
+    };
+
+    if (fee_mode > 0) {
+        policy.fee_modes.add(token.owner, fee_mode);
+    };
+
+    token.fee_mode = fee_mode;
 }
 
 public fun share<FT>(token: FeeToken<FT>) {
