@@ -5,15 +5,3 @@ edition = "2024.beta"
 
 [addresses]
 fee_token = "0x0"
-
-[dependencies.Sui]
-git = "https://github.com/MystenLabs/sui.git"
-rev = "mainnet"
-subdir = "crates/sui-framework/packages/sui-framework"
-override = true
-
-[dependencies.MoveStdlib]
-git = "https://github.com/MystenLabs/sui.git"
-rev = "mainnet"
-subdir = "crates/sui-framework/packages/move-stdlib"
-override = true
