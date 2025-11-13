@@ -200,18 +200,6 @@ public fun remove_fee<FT>(
     policy.total_fee = policy.total_fee - old_fee;
 }
 
-public fun withdraw_fee<FT>(token: &mut FeeToken<FT>, policy: &mut FeeTokenPolicy<FT>) {
-    if (policy.balances.contains(&token.owner)) {
-        let balance = policy.balances.get_mut(&token.owner).withdraw_all();
-        token.balance.join(balance);
-
-        if (!policy.fees.contains(&token.owner)) {
-            let (_, balance) = policy.balances.remove(&token.owner);
-            balance.destroy_zero();
-        };
-    };
-}
-
 public fun new<FT>(
     registry: &mut FeeTokenRegistry,
     owner: address,
@@ -259,6 +247,18 @@ public fun set_fee_mode<FT>(
 
 public fun share<FT>(token: FeeToken<FT>) {
     transfer::share_object(token);
+}
+
+public fun withdraw_fee<FT>(token: &mut FeeToken<FT>, policy: &mut FeeTokenPolicy<FT>) {
+    if (policy.balances.contains(&token.owner)) {
+        let balance = policy.balances.get_mut(&token.owner).withdraw_all();
+        token.balance.join(balance);
+
+        if (!policy.fees.contains(&token.owner)) {
+            let (_, balance) = policy.balances.remove(&token.owner);
+            balance.destroy_zero();
+        };
+    };
 }
 
 public fun withdraw_from_address<FT>(
