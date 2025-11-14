@@ -14,13 +14,14 @@ use sui::vec_map::{Self, VecMap};
 const MAX_BPS: u16 = 10000;
 
 // Errors
-const EAlreadyRegistered: u64 = 1;
+const EFeeTypeAlreadyRegistered: u64 = 1;
 const ETreasuryCapSupplyIsNotZero: u64 = 2;
 const EAccessDenied: u64 = 3;
 const EInvalidFeeMode: u64 = 4;
 const EInvalidTotalFee: u64 = 5;
-const ENotEnoughBalance: u64 = 6;
-const EDepositLockAmountIsNotZero: u64 = 7;
+const EFeeTypeNotRegistered: u64 = 6;
+const ENotEnoughBalance: u64 = 7;
+const EDepositLockAmountIsNotZero: u64 = 8;
 
 // OTW
 public struct FEE_TOKEN has drop {}
@@ -132,7 +133,7 @@ public fun init_fee_token_currency<FT>(
 
     let token_type = type_name::with_defining_ids<FT>();
 
-    assert!(!registry.policies.contains(token_type), EAlreadyRegistered);
+    assert!(!registry.policies.contains(token_type), EFeeTypeAlreadyRegistered);
     registry.policies.add(token_type, object::id(&policy));
 
     (initializer, policy, cap)
@@ -205,6 +206,10 @@ public fun new<FT>(
     owner: address,
     ctx: &mut TxContext,
 ): FeeToken<FT> {
+    let token_type = type_name::with_defining_ids<FT>();
+
+    assert!(registry.policies.contains(token_type), EFeeTypeNotRegistered);
+
     let id = derived_object::claim(&mut registry.id, FeeTokenKey<FT> { owner });
     let token = FeeToken<FT> { id, fee_mode: 0, owner, balance: balance::zero() };
     let ref = FeeTokenRef {
@@ -340,4 +345,95 @@ public fun destroy_lock<FT>(lock: DepositLock<FT>) {
 // Private methods
 macro fun mul_div($a: _, $b: _, $c: _): u64 {
     (($a as u128) * ($b as u128) / ($c as u128)) as u64
+}
+
+// Tests
+#[test_only]
+public struct FT has key {
+    id: UID
+}
+
+#[test_only]
+public fun create_fee_token_currency(ctx: &mut TxContext) {
+    use sui::coin_registry;
+    use sui::test_utils;
+
+    let creator = @0x42;
+    let fee_receiver_01 = @0xcafe01;
+    let fee_receiver_02 = @0xcafe02;
+
+    let mut coin_registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+
+    let mut registry = FeeTokenRegistry { 
+        id: object::new(ctx), 
+        policies: table::new(ctx) 
+    };
+
+    let (currency_initializer, treasury_cap) = coin_registry.new_currency<FT>(
+        9,
+        b"FT".to_string(),
+        b"FT".to_string(),
+        b"".to_string(),
+        b"".to_string(),
+        ctx
+    );
+    test_utils::destroy(coin_registry);
+
+    let (mut initializer, mut policy, cap) = registry.init_fee_token_currency(currency_initializer, ctx);
+
+    policy.add_fee(&cap, fee_receiver_01, 1000);   
+    policy.add_fee(&cap, fee_receiver_02, 1000);   
+    transfer::transfer(cap, creator);
+
+    let (balance, mut lock) = initializer.mint_fee_token_balance(treasury_cap, 10000, ctx);
+
+    let mut token = registry.new<FT>(creator, ctx);
+    token.deposit(balance, &mut lock, &mut policy);
+    token.share();
+    lock.destroy_lock();
+
+    let metadata_cap = initializer.finalize_fee_token_currency(policy, ctx);
+    transfer::public_transfer(metadata_cap, creator);
+
+    transfer::share_object(registry);
+}
+
+#[test]
+public fun transfer_fee_token_test() {
+    use sui::test_scenario;
+
+    let creator = @0x42;
+    let receiver = @0xbee;
+    let fee_receiver_01 = @0xcafe01;
+    let fee_receiver_02 = @0xcafe02;
+
+
+    let mut scenario = test_scenario::begin(@0x0);
+    {
+        let ctx = test_scenario::ctx(&mut scenario);
+        create_fee_token_currency(ctx);
+        
+    };
+    scenario.next_tx(creator);
+    {
+        let mut registry = scenario.take_shared<FeeTokenRegistry>();
+        let mut policy = scenario.take_shared<FeeTokenPolicy<FT>>();        
+        let mut sender_token = scenario.take_shared<FeeToken<FT>>();
+        
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let (balance, mut lock) = sender_token.withdraw_from_address(5000, ctx);
+        let mut receiver_token = registry.new<FT>(receiver, ctx);
+        receiver_token.deposit(balance, &mut lock, &mut policy);        
+        assert!(receiver_token.balance.value() == 4000);
+        receiver_token.share();
+        lock.destroy_lock();
+        assert!(policy.balances.get(&fee_receiver_01).value() == 500);
+        assert!(policy.balances.get(&fee_receiver_02).value() == 500);
+
+        test_scenario::return_shared(sender_token);
+        test_scenario::return_shared(policy);
+        test_scenario::return_shared(registry);
+    };
+    scenario.end();
 }

@@ -25,35 +25,39 @@ The Fee Token module provides a comprehensive system for creating and managing t
 ### 1. FEE_TOKEN (OTW)
 One-time witness struct used for module initialization and package claims.
 
-### 2. FeeTokenRegistry
+### 2. FeeTokenInitializer
+Wrapper for CurrencyInitializer that manages the token currency initialization process.
+
+### 3. FeeTokenRegistry
 Central registry that tracks all registered fee token policies. Created and shared during module initialization.
 
-### 3. FeeTokenPolicy
+### 4. FeeTokenPolicy
 Manages fee configuration for a specific token type:
 - Fee modes table for fee-exempt addresses
 - Total fee percentage (up to 100%)
 - Individual fee recipients and their percentages
 - Balance tracking for fee recipients
 
-### 4. FeeToken
+### 5. FeeToken
 The actual token object containing:
 - Unique derived ID
 - Fee mode
 - Owner address
 - Token balance
 
-### 5. DepositLock
+### 6. DepositLock
 Ensures atomic deposit operations with proper fee calculations.
 
 ## Error Codes
 
-- `EAlreadyRegistered` (1): Token type already registered
+- `EFeeTypeAlreadyRegistered` (1): Token type already registered
 - `ETreasuryCapSupplyIsNotZero` (2): Treasury cap must have zero supply before minting
 - `EAccessDenied` (3): Unauthorized access attempt
 - `EInvalidFeeMode` (4): Invalid fee mode
 - `EInvalidTotalFee` (5): Total fees exceed 100%
-- `ENotEnoughBalance` (6): Insufficient token balance
-- `EDepositLockAmountIsNotZero` (7): Lock must be fully consumed
+- `EFeeTypeNotRegistered` (6): Fee type not registered
+- `ENotEnoughBalance` (7): Insufficient token balance
+- `EDepositLockAmountIsNotZero` (8): Lock must be fully consumed
 
 ## Events
 
