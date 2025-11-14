@@ -360,6 +360,7 @@ public fun get_fee_token_id<FT>(registry: &FeeTokenRegistry, owner: address): ID
 
 #[test_only]
 public fun create_fee_token_currency(ctx: &mut TxContext) {
+    use sui::coin_registry;
     use sui::test_utils;
 
     let creator = @0x42;
