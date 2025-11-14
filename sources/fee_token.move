@@ -354,6 +354,11 @@ public struct FT has key {
 }
 
 #[test_only]
+public fun get_fee_token_id<FT>(registry: &FeeTokenRegistry, owner: address): ID {
+    derived_object::derive_address(registry.id.uid_to_inner(), FeeTokenKey<FT> { owner }).to_id()
+}
+
+#[test_only]
 public fun create_fee_token_currency(ctx: &mut TxContext) {
     use sui::coin_registry;
     use sui::test_utils;
@@ -417,12 +422,14 @@ public fun transfer_fee_token_test() {
     scenario.next_tx(creator);
     {
         let mut registry = scenario.take_shared<FeeTokenRegistry>();
-        let mut policy = scenario.take_shared<FeeTokenPolicy<FT>>();        
-        let mut sender_token = scenario.take_shared<FeeToken<FT>>();
+        let mut policy = scenario.take_shared<FeeTokenPolicy<FT>>();                
+        
+        let creator_fee_token_id = registry.get_fee_token_id<FT>(creator);
+        let mut creator_token = scenario.take_shared_by_id<FeeToken<FT>>(creator_fee_token_id);        
         
         let ctx = test_scenario::ctx(&mut scenario);
 
-        let (balance, mut lock) = sender_token.withdraw_from_address(5000, ctx);
+        let (balance, mut lock) = creator_token.withdraw_from_address(5000, ctx);
         let mut receiver_token = registry.new<FT>(receiver, ctx);
         receiver_token.deposit(balance, &mut lock, &mut policy);        
         assert!(receiver_token.balance.value() == 4000);
@@ -431,7 +438,32 @@ public fun transfer_fee_token_test() {
         assert!(policy.balances.get(&fee_receiver_01).value() == 500);
         assert!(policy.balances.get(&fee_receiver_02).value() == 500);
 
-        test_scenario::return_shared(sender_token);
+        test_scenario::return_shared(creator_token);
+        test_scenario::return_shared(registry);
+        test_scenario::return_shared(policy);
+    };
+    scenario.next_tx(creator);
+    {
+        let registry = scenario.take_shared<FeeTokenRegistry>();
+        let mut policy = scenario.take_shared<FeeTokenPolicy<FT>>();        
+        
+        let creator_fee_token_id = registry.get_fee_token_id<FT>(creator);
+        let mut creator_token = scenario.take_shared_by_id<FeeToken<FT>>(creator_fee_token_id);
+        
+        let receiver_fee_token_id = registry.get_fee_token_id<FT>(receiver);
+        let mut receiver_token = scenario.take_shared_by_id<FeeToken<FT>>(receiver_fee_token_id);
+        
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let (balance, mut lock) = creator_token.withdraw_from_address(2500, ctx);
+        receiver_token.deposit(balance, &mut lock, &mut policy);        
+        assert!(receiver_token.balance.value() == 6000);
+        lock.destroy_lock();
+        assert!(policy.balances.get(&fee_receiver_01).value() == 750);
+        assert!(policy.balances.get(&fee_receiver_02).value() == 750);
+
+        test_scenario::return_shared(creator_token);
+        test_scenario::return_shared(receiver_token);
         test_scenario::return_shared(policy);
         test_scenario::return_shared(registry);
     };
