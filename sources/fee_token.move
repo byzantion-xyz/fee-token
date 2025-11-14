@@ -28,7 +28,7 @@ public struct FEE_TOKEN has drop {}
 
 // Initializer
 public struct FeeTokenInitializer<phantom FT> {
-    initializer: CurrencyInitializer<FT>
+    initializer: CurrencyInitializer<FT>,
 }
 
 // Registry
@@ -161,7 +161,7 @@ public fun finalize_fee_token_currency<FT>(
     transfer::share_object(policy);
 
     let FeeTokenInitializer {
-        initializer
+        initializer,
     } = initializer;
 
     initializer.finalize(ctx)
@@ -350,7 +350,7 @@ macro fun mul_div($a: _, $b: _, $c: _): u64 {
 // Tests
 #[test_only]
 public struct FT has key {
-    id: UID
+    id: UID,
 }
 
 #[test_only]
@@ -371,7 +371,7 @@ public fun create_fee_token_currency(ctx: &mut TxContext) {
 
     let mut registry = FeeTokenRegistry {
         id: object::new(ctx),
-        policies: table::new(ctx)
+        policies: table::new(ctx),
     };
 
     let (currency_initializer, treasury_cap) = coin_registry.new_currency<FT>(
@@ -380,11 +380,14 @@ public fun create_fee_token_currency(ctx: &mut TxContext) {
         b"FT".to_string(),
         b"".to_string(),
         b"".to_string(),
-        ctx
+        ctx,
     );
     test_utils::destroy(coin_registry);
 
-    let (mut initializer, mut policy, cap) = registry.init_fee_token_currency(currency_initializer, ctx);
+    let (mut initializer, mut policy, cap) = registry.init_fee_token_currency(
+        currency_initializer,
+        ctx,
+    );
 
     policy.add_fee(&cap, fee_receiver_01, 1000);
     policy.add_fee(&cap, fee_receiver_02, 1000);
@@ -412,12 +415,10 @@ public fun transfer_fee_token_test() {
     let fee_receiver_01 = @0xcafe01;
     let fee_receiver_02 = @0xcafe02;
 
-
     let mut scenario = test_scenario::begin(@0x0);
     {
         let ctx = test_scenario::ctx(&mut scenario);
         create_fee_token_currency(ctx);
-
     };
     scenario.next_tx(creator);
     {
