@@ -342,6 +342,10 @@ public fun destroy_lock<FT>(lock: DepositLock<FT>) {
     let DepositLock { .. } = lock;
 }
 
+public fun value<FT>(token: &FeeToken<FT>): u64 {
+    token.balance.value()
+}
+
 // Private methods
 macro fun mul_div($a: _, $b: _, $c: _): u64 {
     (($a as u128) * ($b as u128) / ($c as u128)) as u64
