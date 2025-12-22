@@ -342,6 +342,20 @@ public fun destroy_lock<FT>(lock: DepositLock<FT>) {
     let DepositLock { .. } = lock;
 }
 
+public fun fee<FT>(
+    lock: &DepositLock<FT>,
+    policy: &FeeTokenPolicy<FT>,
+): u64 {
+    let mut total_fee: u64 = 0;
+    if (lock.include_fee) {
+        policy.fees.keys().do_ref!(|receiver| {
+            let fee_amount = mul_div!(lock.amount, *policy.fees.get(receiver), MAX_BPS);
+            total_fee = total_fee + fee_amount;
+        });
+    };
+    total_fee
+}
+
 public fun value<FT>(token: &FeeToken<FT>): u64 {
     token.balance.value()
 }
