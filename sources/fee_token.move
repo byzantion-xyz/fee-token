@@ -366,6 +366,65 @@ public fun get_fee_token_id<FT>(registry: &FeeTokenRegistry, owner: address): ID
 }
 
 #[test_only]
+public fun create_fee_token_for_testing<FT>(owner: address, initial_balance: u64, ctx: &mut TxContext): FeeToken<FT> {
+    FeeToken<FT> {
+        id: object::new(ctx),
+        fee_mode: 0,
+        owner,
+        balance: balance::create_for_testing<FT>(initial_balance),
+    }
+}
+
+#[test_only]
+public fun create_fee_token_policy_for_testing<FT>(ctx: &mut TxContext): FeeTokenPolicy<FT> {
+    FeeTokenPolicy<FT> {
+        id: object::new(ctx),
+        fee_modes: table::new(ctx),
+        total_fee: 0,
+        fees: vec_map::empty(),
+        balances: vec_map::empty(),
+    }
+}
+
+#[test_only]
+public fun create_deposit_lock_for_testing<FT>(amount: u64, include_fee: bool): DepositLock<FT> {
+    DepositLock<FT> { amount, include_fee }
+}
+
+#[test_only]
+public fun destroy_fee_token_for_testing<FT>(token: FeeToken<FT>) {
+    let FeeToken { id, fee_mode: _, owner: _, balance } = token;
+    object::delete(id);
+    balance::destroy_for_testing(balance);
+}
+
+#[test_only]
+public fun destroy_fee_token_policy_for_testing<FT>(policy: FeeTokenPolicy<FT>) {
+    let FeeTokenPolicy { id, fee_modes, total_fee: _, mut fees, mut balances } = policy;
+    object::delete(id);
+    table::drop(fee_modes);
+    while (!fees.is_empty()) {
+        fees.pop();
+    };
+    fees.destroy_empty();
+    while (!balances.is_empty()) {
+        let (_, balance) = balances.pop();
+        balance::destroy_for_testing(balance);
+    };
+    balances.destroy_empty();
+}
+
+#[test_only]
+public fun destroy_deposit_lock_for_testing<FT>(lock: DepositLock<FT>) {
+    let DepositLock { amount: _, include_fee: _ } = lock;
+}
+
+#[test_only]
+public fun fee_token_balance<FT>(token: &FeeToken<FT>): u64 {
+    token.balance.value()
+}
+
+#[test_only]
 public fun create_fee_token_currency(ctx: &mut TxContext) {
     use sui::coin_registry;
     use sui::test_utils;
