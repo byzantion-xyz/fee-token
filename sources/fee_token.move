@@ -313,7 +313,7 @@ public fun deposit<FT>(
     mut balance: Balance<FT>,
     lock: &mut DepositLock<FT>,
     policy: &mut FeeTokenPolicy<FT>,
-): (u64, u64) {
+) {
     let amount = balance.value();
     let mut fee: u64 = 0;
 
@@ -335,8 +335,6 @@ public fun deposit<FT>(
         amount,
         fee,
     });
-
-    (amount, fee)
 }
 
 public fun destroy_lock<FT>(lock: DepositLock<FT>) {
@@ -349,9 +347,6 @@ public fun empty_lock<FT>(): DepositLock<FT> {
     DepositLock { amount: 0, include_fee: false }
 }
 
-public fun lock_amount<FT>(lock: &DepositLock<FT>): u64 {
-    lock.amount
-}
 
 // Private methods
 macro fun mul_div($a: _, $b: _, $c: _): u64 {
