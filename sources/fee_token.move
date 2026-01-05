@@ -349,6 +349,10 @@ public fun empty_lock<FT>(): DepositLock<FT> {
     DepositLock { amount: 0, include_fee: false }
 }
 
+public fun lock_amount<FT>(lock: &DepositLock<FT>): u64 {
+    lock.amount
+}
+
 // Private methods
 macro fun mul_div($a: _, $b: _, $c: _): u64 {
     (($a as u128) * ($b as u128) / ($c as u128)) as u64
