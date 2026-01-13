@@ -308,6 +308,10 @@ public fun withdraw_from_object<FT>(
     (balance, lock)
 }
 
+public fun owner<FT>(token: &FeeToken<FT>): address {
+    token.owner
+}
+
 public fun deposit<FT>(
     token: &mut FeeToken<FT>,
     mut balance: Balance<FT>,
@@ -342,10 +346,6 @@ public fun destroy_lock<FT>(lock: DepositLock<FT>) {
     let DepositLock { .. } = lock;
 }
 
-public fun owner<FT>(token: &FeeToken<FT>): address {
-    token.owner
-}
-
 // Private methods
 macro fun mul_div($a: _, $b: _, $c: _): u64 {
     (($a as u128) * ($b as u128) / ($c as u128)) as u64
@@ -361,33 +361,6 @@ public struct FT has key {
 public fun get_fee_token_id<FT>(registry: &FeeTokenRegistry, owner: address): ID {
     derived_object::derive_address(registry.id.uid_to_inner(), FeeTokenKey<FT> { owner }).to_id()
 }
-
-#[test_only]
-public fun create_fee_token_for_testing<FT>(owner: address, initial_balance: u64, ctx: &mut TxContext): FeeToken<FT> {
-    FeeToken<FT> {
-        id: object::new(ctx),
-        fee_mode: 0,
-        owner,
-        balance: balance::create_for_testing<FT>(initial_balance),
-    }
-}
-
-#[test_only]
-public fun create_fee_token_policy_for_testing<FT>(ctx: &mut TxContext): FeeTokenPolicy<FT> {
-    FeeTokenPolicy<FT> {
-        id: object::new(ctx),
-        fee_modes: table::new(ctx),
-        total_fee: 0,
-        fees: vec_map::empty(),
-        balances: vec_map::empty(),
-    }
-}
-
-#[test_only]
-public fun create_deposit_lock_for_testing<FT>(amount: u64, include_fee: bool): DepositLock<FT> {
-    DepositLock<FT> { amount, include_fee }
-}
-
 
 #[test_only]
 public fun create_fee_token_currency(ctx: &mut TxContext) {

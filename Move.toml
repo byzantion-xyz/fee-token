@@ -3,6 +3,5 @@ name = "fee_token"
 version = "1.0.0"
 edition = "2024.beta"
 
-
 [addresses]
 fee_token = "0x0"
