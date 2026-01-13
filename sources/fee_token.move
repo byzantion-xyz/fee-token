@@ -9,6 +9,7 @@ use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
 use sui::vec_map::{Self, VecMap};
+use sui::token::amount;
 
 // Constants
 const MAX_BPS: u16 = 10000;
@@ -21,7 +22,8 @@ const EInvalidFeeMode: u64 = 4;
 const EInvalidTotalFee: u64 = 5;
 const EFeeTypeNotRegistered: u64 = 6;
 const ENotEnoughBalance: u64 = 7;
-const EDepositLockAmountIsNotZero: u64 = 8;
+const EDepositLocksAreNotCompatible: u64 = 8;
+const EDepositLockAmountIsNotZero: u64 = 9;
 
 // OTW
 public struct FEE_TOKEN has drop {}
@@ -339,6 +341,12 @@ public fun deposit<FT>(
         amount,
         fee,
     });
+}
+
+public fun join_lock<FT>(lock: &mut DepositLock<FT>, other: DepositLock<FT>) {
+    assert!(lock.include_fee == other.include_fee, EDepositLocksAreNotCompatible);
+    let DepositLock { amount, ..} = other;
+    lock.amount = lock.amount + amount;
 }
 
 public fun destroy_lock<FT>(lock: DepositLock<FT>) {
