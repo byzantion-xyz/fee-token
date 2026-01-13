@@ -308,6 +308,10 @@ public fun withdraw_from_object<FT>(
     (balance, lock)
 }
 
+public fun owner<FT>(token: &FeeToken<FT>): address {
+    token.owner
+}
+
 public fun deposit<FT>(
     token: &mut FeeToken<FT>,
     mut balance: Balance<FT>,
