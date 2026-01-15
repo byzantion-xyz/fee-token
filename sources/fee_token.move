@@ -14,6 +14,10 @@ use sui::token::amount;
 // Constants
 const MAX_BPS: u16 = 10000;
 
+const FEE_MODE_ON: u64 = 0;
+const FEE_MODE_OFF: u64 = 1;
+const FEE_MODE_FORCE_OFF: u64 = 2;
+
 // Errors
 const EFeeTypeAlreadyRegistered: u64 = 1;
 const ETreasuryCapSupplyIsNotZero: u64 = 2;
@@ -42,13 +46,18 @@ public struct FeeTokenRegistry has key {
 // Policy
 public struct FeeTokenPolicy<phantom FT> has key {
     id: UID,
-    fee_modes: Table<address, u64>,
-    total_fee: u16,
     fees: VecMap<address, u16>,
+    total_fee: u16,
+    fee_modes: Table<address, u64>,
     balances: VecMap<address, Balance<FT>>,
 }
 
-public struct FeeTokenPolicyCap<phantom FT> has key, store {
+public struct FeeTokenPolicyFeesCap<phantom FT> has key, store {
+    id: UID,
+    policy_id: ID,
+}
+
+public struct FeeTokenPolicyFeeModeCap<phantom FT> has key, store {
     id: UID,
     policy_id: ID,
 }
@@ -117,18 +126,23 @@ public fun init_fee_token_currency<FT>(
     registry: &mut FeeTokenRegistry,
     initializer: CurrencyInitializer<FT>,
     ctx: &mut TxContext,
-): (FeeTokenInitializer<FT>, FeeTokenPolicy<FT>, FeeTokenPolicyCap<FT>) {
+): (FeeTokenInitializer<FT>, FeeTokenPolicy<FT>, FeeTokenPolicyFeesCap<FT>, FeeTokenPolicyFeeModeCap<FT>) {
     let initializer = FeeTokenInitializer { initializer };
 
     let policy = FeeTokenPolicy<FT> {
         id: object::new(ctx),
-        fee_modes: table::new(ctx),
-        total_fee: 0,
         fees: vec_map::empty(),
+        total_fee: 0,
+        fee_modes: table::new(ctx),
         balances: vec_map::empty(),
     };
 
-    let cap = FeeTokenPolicyCap<FT> {
+    let policy_fees_cap = FeeTokenPolicyFeesCap<FT> {
+        id: object::new(ctx),
+        policy_id: object::id(&policy),
+    };
+
+    let policy_fee_mode_cap = FeeTokenPolicyFeeModeCap<FT> {
         id: object::new(ctx),
         policy_id: object::id(&policy),
     };
@@ -138,7 +152,7 @@ public fun init_fee_token_currency<FT>(
     assert!(!registry.policies.contains(token_type), EFeeTypeAlreadyRegistered);
     registry.policies.add(token_type, object::id(&policy));
 
-    (initializer, policy, cap)
+    (initializer, policy, policy_fees_cap, policy_fee_mode_cap)
 }
 
 public fun mint_fee_token_balance<FT>(
@@ -153,6 +167,16 @@ public fun mint_fee_token_balance<FT>(
     initializer.initializer.make_supply_burn_only(cap);
 
     (balance, DepositLock { amount: supply, include_fee: false })
+}
+
+public fun destroy_fee_token_policy_fees_cap<FT>(cap: FeeTokenPolicyFeesCap<FT>) {
+    let FeeTokenPolicyFeesCap { id, policy_id: _ } = cap;
+    object::delete(id);
+}
+
+public fun destroy_fee_token_policy_fee_mode_cap<FT>(cap: FeeTokenPolicyFeeModeCap<FT>) {
+    let FeeTokenPolicyFeeModeCap { id, policy_id: _ } = cap;
+    object::delete(id);
 }
 
 public fun finalize_fee_token_currency<FT>(
@@ -171,7 +195,7 @@ public fun finalize_fee_token_currency<FT>(
 
 public fun add_fee<FT>(
     policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
+    cap: &FeeTokenPolicyFeesCap<FT>,
     receiver: address,
     fee_bps: u16,
 ) {
@@ -194,7 +218,7 @@ public fun add_fee<FT>(
 
 public fun remove_fee<FT>(
     policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
+    cap: &FeeTokenPolicyFeesCap<FT>,
     receiver: address,
 ) {
     assert!(policy.id.to_inner() == cap.policy_id, EAccessDenied);
@@ -213,14 +237,20 @@ public fun new<FT>(
     assert!(registry.policies.contains(token_type), EFeeTypeNotRegistered);
 
     let id = derived_object::claim(&mut registry.id, FeeTokenKey<FT> { owner });
-    let token = FeeToken<FT> { id, fee_mode: 0, owner, balance: balance::zero() };
+
+    let token = FeeToken<FT> {
+        id,
+        fee_mode: FEE_MODE_ON,
+        owner,
+        balance: balance::zero()
+    };
+
     let ref = FeeTokenRef {
         id: object::new(ctx),
         token_type: type_name::with_defining_ids<FT>(),
         token_id: object::id(&token),
         token_owner: owner,
     };
-
     transfer::transfer(ref, owner);
 
     event::emit(NewFeeTokenEvent {
@@ -235,17 +265,17 @@ public fun new<FT>(
 public fun set_fee_mode<FT>(
     token: &mut FeeToken<FT>,
     policy: &mut FeeTokenPolicy<FT>,
-    cap: &FeeTokenPolicyCap<FT>,
+    cap: &FeeTokenPolicyFeeModeCap<FT>,
     fee_mode: u64,
 ) {
     assert!(policy.id.to_inner() == cap.policy_id, EAccessDenied);
-    assert!(fee_mode < 3, EInvalidFeeMode);
+    assert!(fee_mode <= FEE_MODE_FORCE_OFF, EInvalidFeeMode);
 
     if (policy.fee_modes.contains(token.owner)) {
         policy.fee_modes.remove(token.owner);
     };
 
-    if (fee_mode > 0) {
+    if (fee_mode >= FEE_MODE_OFF) {
         policy.fee_modes.add(token.owner, fee_mode);
     };
 
@@ -284,7 +314,7 @@ public fun withdraw_from_address<FT>(
     });
 
     let balance = token.balance.split(amount);
-    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < 2) };
+    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < FEE_MODE_FORCE_OFF) };
 
     (balance, lock)
 }
@@ -305,7 +335,7 @@ public fun withdraw_from_object<FT>(
     });
 
     let balance = token.balance.split(amount);
-    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < 2) };
+    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < FEE_MODE_FORCE_OFF) };
 
     (balance, lock)
 }
@@ -323,7 +353,7 @@ public fun deposit<FT>(
     let amount = balance.value();
     let mut fee: u64 = 0;
 
-    if (lock.include_fee && token.fee_mode == 0) {
+    if (lock.include_fee && token.fee_mode == FEE_MODE_ON) {
         policy.fees.keys().do_ref!(|receiver| {
             let fee_amount = mul_div!(amount, *policy.fees.get(receiver), MAX_BPS);
             let fee_balance = balance.split(fee_amount);
@@ -396,14 +426,15 @@ public fun create_fee_token_currency(ctx: &mut TxContext) {
     );
     test_utils::destroy(coin_registry);
 
-    let (mut initializer, mut policy, cap) = registry.init_fee_token_currency(
+    let (mut initializer, mut policy, policy_fees_cap, policy_fee_mode_cap) = registry.init_fee_token_currency(
         currency_initializer,
         ctx,
     );
 
-    policy.add_fee(&cap, fee_receiver_01, 1000);
-    policy.add_fee(&cap, fee_receiver_02, 1000);
-    transfer::transfer(cap, creator);
+    policy.add_fee(&policy_fees_cap, fee_receiver_01, 1000);
+    policy.add_fee(&policy_fees_cap, fee_receiver_02, 1000);
+    transfer::transfer(policy_fees_cap, creator);
+    transfer::transfer(policy_fee_mode_cap, creator);
 
     let (balance, mut lock) = initializer.mint_fee_token_balance(treasury_cap, 10000, ctx);
 

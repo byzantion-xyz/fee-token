@@ -9,7 +9,7 @@ The Fee Token module provides a comprehensive system for creating and managing t
 - Automatic fee distribution to multiple recipients
 - Secure token management with access controls
 - Deposit/withdrawal operations with automatic fee deduction
-- Allowlist functionality to exempt specific addresses from fees
+- Fee mode system to control fee behavior per account
 
 ## Features
 
@@ -17,8 +17,8 @@ The Fee Token module provides a comprehensive system for creating and managing t
 - **Derived object system**: Uses Sui's derived object pattern for deterministic token addresses
 - **Lock mechanism**: Ensures proper handling of deposits and withdrawals with fee calculations
 - **Event emission**: Comprehensive event logging for all major operations
-- **Access control**: Policy-based management with capability objects
-- **Allowlist system**: Exempt specific addresses from fee deductions
+- **Separated access control**: Separate capabilities for fee configuration and fee mode management
+- **Fee mode system**: Control fee behavior with three modes (ON, OFF, FORCE_OFF)
 
 ## Core Components
 
@@ -33,20 +33,39 @@ Central registry that tracks all registered fee token policies. Created and shar
 
 ### 4. FeeTokenPolicy
 Manages fee configuration for a specific token type:
-- Fee modes table for fee-exempt addresses
+- Fee modes table for per-address fee settings
 - Total fee percentage (up to 100%)
 - Individual fee recipients and their percentages
 - Balance tracking for fee recipients
 
-### 5. FeeToken
+### 5. FeeTokenPolicyFeesCap
+Capability object for managing fee configuration:
+- Add/remove fee recipients
+- Modify fee percentages
+
+### 6. FeeTokenPolicyFeeModeCap
+Capability object for managing fee modes:
+- Set fee mode for individual token owners
+
+### 7. FeeToken
 The actual token object containing:
 - Unique derived ID
 - Fee mode
 - Owner address
 - Token balance
 
-### 6. DepositLock
+### 8. DepositLock
 Ensures atomic deposit operations with proper fee calculations.
+
+## Fee Modes
+
+The module supports three fee modes that control how fees are applied:
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `FEE_MODE_ON` | 0 | Fees enabled - charges on receive, allows fee on send |
+| `FEE_MODE_OFF` | 1 | Fees disabled for receiver - doesn't charge, allows fee on send |
+| `FEE_MODE_FORCE_OFF` | 2 | Force fees off - sender blocks all fees from being charged |
 
 ## Error Codes
 
@@ -57,7 +76,8 @@ Ensures atomic deposit operations with proper fee calculations.
 - `EInvalidTotalFee` (5): Total fees exceed 100%
 - `EFeeTypeNotRegistered` (6): Fee type not registered
 - `ENotEnoughBalance` (7): Insufficient token balance
-- `EDepositLockAmountIsNotZero` (8): Lock must be fully consumed
+- `EDepositLocksAreNotCompatible` (8): Deposit locks have incompatible fee settings
+- `EDepositLockAmountIsNotZero` (9): Lock must be fully consumed
 
 ## Events
 
@@ -68,12 +88,9 @@ The module emits the following events:
 
 ## Security Considerations
 
-1. **Access Control**: Only policy cap holders can modify fee configurations
-2. **Balance Protection**: Withdrawals require proper ownership verification
-3. **Fee Limits**: Total fees cannot exceed 100% (10000 basis points)
-4. **Atomic Operations**: Deposit locks ensure complete operations
-
-## Dependencies
-
-- Sui Framework (mainnet version)
-- Move Standard Library
+1. **Separated Access Control**: Fee configuration and fee mode management use separate capabilities
+2. **Immutability Option**: Capabilities can be destroyed to make configuration immutable
+3. **Balance Protection**: Withdrawals require proper ownership verification
+4. **Fee Limits**: Total fees cannot exceed 100% (10000 basis points)
+5. **Atomic Operations**: Deposit locks ensure complete operations
+6. **Package Immutability**: For full immutability, make the package immutable after destroying caps
