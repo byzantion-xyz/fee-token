@@ -402,8 +402,8 @@ public fun get_fee_token_id<FT>(registry: &FeeTokenRegistry, owner: address): ID
 
 #[test_only]
 public fun create_fee_token_currency(ctx: &mut TxContext) {
+    use std::unit_test;
     use sui::coin_registry;
-    use sui::test_utils;
 
     let creator = @0x42;
     let fee_receiver_01 = @0xcafe01;
@@ -424,7 +424,7 @@ public fun create_fee_token_currency(ctx: &mut TxContext) {
         b"".to_string(),
         ctx,
     );
-    test_utils::destroy(coin_registry);
+    unit_test::destroy(coin_registry);
 
     let (mut initializer, mut policy, policy_fees_cap, policy_fee_mode_cap) = registry.init_fee_token_currency(
         currency_initializer,
