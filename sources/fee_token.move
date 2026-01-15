@@ -3,7 +3,7 @@ module fee_token::fee_token;
 use std::type_name::{Self, TypeName};
 use sui::balance::{Self, Balance};
 use sui::coin::TreasuryCap;
-use sui::coin_registry::{CurrencyInitializer, MetadataCap};
+use sui::coin_registry::{Currency, CurrencyInitializer, MetadataCap};
 use sui::derived_object;
 use sui::event;
 use sui::package;
@@ -107,6 +107,13 @@ public struct DepositFeeTokenEvent has copy, drop {
     token_owner: address,
     amount: u64,
     fee: u64,
+}
+
+public struct BurnBalanceFeeTokenEvent has copy, drop {
+    token_type: TypeName,
+    token_id: ID,
+    token_owner: address,
+    amount: u64
 }
 
 // Init method
@@ -371,6 +378,44 @@ public fun deposit<FT>(
         amount,
         fee,
     });
+}
+
+public fun burn_balance_from_address<FT>(
+    token: &mut FeeToken<FT>,
+    currency: &mut Currency<FT>,
+    ctx: &mut TxContext,
+) {
+    assert!(token.owner == ctx.sender(), EAccessDenied);
+
+    let balance = token.balance.withdraw_all();
+
+    event::emit(BurnBalanceFeeTokenEvent {
+        token_type: type_name::with_defining_ids<FT>(),
+        token_id: object::id(token),
+        token_owner: token.owner,
+        amount: balance.value(),
+    });
+
+    currency.burn_balance(balance);    
+}
+
+public fun burn_balance_from_object<FT>(
+    token: &mut FeeToken<FT>,
+    object: &UID,
+    currency: &mut Currency<FT>,
+) {
+    assert!(token.owner == object.uid_to_address(), EAccessDenied);
+
+    let balance = token.balance.withdraw_all();
+
+    event::emit(BurnBalanceFeeTokenEvent {
+        token_type: type_name::with_defining_ids<FT>(),
+        token_id: object::id(token),
+        token_owner: token.owner,
+        amount: balance.value(),
+    });
+
+    currency.burn_balance(balance);    
 }
 
 public fun join_lock<FT>(lock: &mut DepositLock<FT>, other: DepositLock<FT>) {
