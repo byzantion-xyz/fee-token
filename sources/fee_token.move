@@ -347,6 +347,10 @@ public fun withdraw_from_object<FT>(
     (balance, lock)
 }
 
+public fun balance<FT>(token: &FeeToken<FT>): u64 {
+    token.balance.value()
+}
+
 public fun owner<FT>(token: &FeeToken<FT>): address {
     token.owner
 }
@@ -384,38 +388,42 @@ public fun burn_balance_from_address<FT>(
     token: &mut FeeToken<FT>,
     currency: &mut Currency<FT>,
     ctx: &mut TxContext,
-) {
+): u64 {
     assert!(token.owner == ctx.sender(), EAccessDenied);
 
     let balance = token.balance.withdraw_all();
+    let amount = balance.value();
+    currency.burn_balance(balance);    
 
     event::emit(BurnBalanceFeeTokenEvent {
         token_type: type_name::with_defining_ids<FT>(),
         token_id: object::id(token),
         token_owner: token.owner,
-        amount: balance.value(),
+        amount,
     });
-
-    currency.burn_balance(balance);    
+    
+    amount
 }
 
 public fun burn_balance_from_object<FT>(
     token: &mut FeeToken<FT>,
     object: &UID,
     currency: &mut Currency<FT>,
-) {
+): u64 {
     assert!(token.owner == object.uid_to_address(), EAccessDenied);
 
     let balance = token.balance.withdraw_all();
+    let amount = balance.value();
+    currency.burn_balance(balance);    
 
     event::emit(BurnBalanceFeeTokenEvent {
         token_type: type_name::with_defining_ids<FT>(),
         token_id: object::id(token),
         token_owner: token.owner,
-        amount: balance.value(),
+        amount,
     });
 
-    currency.burn_balance(balance);    
+    amount
 }
 
 public fun join_lock<FT>(lock: &mut DepositLock<FT>, other: DepositLock<FT>) {
