@@ -61,8 +61,8 @@ Ensures atomic deposit operations with proper fee calculations. This is a hot-po
 
 ### Deposit & Withdraw
 - `withdraw_from_address` / `withdraw_from_object`: Withdraw tokens, returns balance and a deposit lock
+- `assess_deposit_fee`: Estimate the fee amount for a deposit. Accepts an `is_gross` flag: when `true`, the amount is the gross (pre-fee) amount; when `false`, the amount is the net (post-fee) amount and the function reverse-calculates the fee
 - `deposit`: Deposit tokens with automatic fee deduction
-- `calculate_deposit_fee`: Preview the fee amount before depositing
 
 ### Burn
 - `burn_balance_from_address` / `burn_balance_from_object`: Burn tokens permanently

@@ -363,6 +363,26 @@ public fun owner<FT>(token: &FeeToken<FT>): address {
     token.owner
 }
 
+public fun assess_deposit_fee<FT>(
+    token: &FeeToken<FT>,
+    amount: u64,    
+    is_gross: bool,
+    lock: &DepositLock<FT>,
+    policy: &FeeTokenPolicy<FT>,
+): u64 {    
+    if (lock.include_fee && token.fee_mode == FEE_MODE_ON) {
+        let mut amount = amount;
+        
+        if (!is_gross) {
+            amount = mul_div!(amount, MAX_BPS, (MAX_BPS - policy.total_fee))
+        };
+
+        mul_div!(amount, policy.total_fee, MAX_BPS)
+    } else {
+        0
+    }
+}
+
 public fun deposit<FT>(
     token: &mut FeeToken<FT>,
     mut balance: Balance<FT>,
@@ -392,25 +412,6 @@ public fun deposit<FT>(
         amount,
         fee,
     });
-}
-
-public fun calculate_deposit_fee<FT>(
-    token: &FeeToken<FT>,
-    balance: &Balance<FT>,
-    lock: &DepositLock<FT>,
-    policy: &FeeTokenPolicy<FT>,
-): u64 {
-    let amount = balance.value();
-    let mut fee: u64 = 0;
-
-    if (lock.include_fee && token.fee_mode == FEE_MODE_ON) {
-        policy.fees.keys().do_ref!(|receiver| {
-            let fee_amount = mul_div!(amount, *policy.fees.get(receiver), MAX_BPS);
-            fee = fee + fee_amount;
-        });
-    };
-
-    fee
 }
 
 public fun burn_balance_from_address<FT>(
