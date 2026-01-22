@@ -8,8 +8,8 @@ use sui::derived_object;
 use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
-use sui::vec_map::{Self, VecMap};
 use sui::token::amount;
+use sui::vec_map::{Self, VecMap};
 
 // Constants
 const MAX_BPS: u16 = 10000;
@@ -23,11 +23,13 @@ const EFeeTypeAlreadyRegistered: u64 = 1;
 const ETreasuryCapSupplyIsNotZero: u64 = 2;
 const EAccessDenied: u64 = 3;
 const EInvalidFeeMode: u64 = 4;
-const EInvalidTotalFee: u64 = 5;
-const EFeeTypeNotRegistered: u64 = 6;
-const ENotEnoughBalance: u64 = 7;
-const EDepositLocksAreNotCompatible: u64 = 8;
-const EDepositLockAmountIsNotZero: u64 = 9;
+const EInvalidReceiverFee: u64 = 5;
+const EInvalidTotalFee: u64 = 6;
+const EFeeTypeNotRegistered: u64 = 7;
+const ENotEnoughBalance: u64 = 8;
+const EDepositAmountIsTooLow: u64 = 9;
+const EDepositLocksAreNotCompatible: u64 = 10;
+const EDepositLockAmountIsNotZero: u64 = 11;
 
 // OTW
 public struct FEE_TOKEN has drop {}
@@ -113,7 +115,7 @@ public struct BurnBalanceFeeTokenEvent has copy, drop {
     token_type: TypeName,
     token_id: ID,
     token_owner: address,
-    amount: u64
+    amount: u64,
 }
 
 // Init method
@@ -133,7 +135,12 @@ public fun init_fee_token_currency<FT>(
     registry: &mut FeeTokenRegistry,
     initializer: CurrencyInitializer<FT>,
     ctx: &mut TxContext,
-): (FeeTokenInitializer<FT>, FeeTokenPolicy<FT>, FeeTokenPolicyFeeModeCap<FT>, FeeTokenPolicyFeesCap<FT>) {
+): (
+    FeeTokenInitializer<FT>,
+    FeeTokenPolicy<FT>,
+    FeeTokenPolicyFeeModeCap<FT>,
+    FeeTokenPolicyFeesCap<FT>,
+) {
     let initializer = FeeTokenInitializer { initializer };
 
     let policy = FeeTokenPolicy<FT> {
@@ -207,6 +214,7 @@ public fun add_fee<FT>(
     fee_bps: u16,
 ) {
     assert!(policy.id.to_inner() == cap.policy_id, EAccessDenied);
+    assert!(fee_bps > 0, EInvalidReceiverFee);
 
     if (policy.fees.contains(&receiver)) {
         let (_, old_fee) = policy.fees.remove(&receiver);
@@ -249,7 +257,7 @@ public fun new<FT>(
         id,
         fee_mode: FEE_MODE_ON,
         owner,
-        balance: balance::zero()
+        balance: balance::zero(),
     };
 
     let ref = FeeTokenRef {
@@ -367,8 +375,10 @@ public fun deposit<FT>(
     if (lock.include_fee && token.fee_mode == FEE_MODE_ON) {
         policy.fees.keys().do_ref!(|receiver| {
             let fee_amount = mul_div!(amount, *policy.fees.get(receiver), MAX_BPS);
+            assert!(fee_amount > 0, EDepositAmountIsTooLow);
+            fee = fee + fee_amount;
+
             let fee_balance = balance.split(fee_amount);
-            fee = fee + fee_balance.value();
             policy.balances.get_mut(receiver).join(fee_balance);
         });
     };
@@ -384,6 +394,25 @@ public fun deposit<FT>(
     });
 }
 
+public fun calculate_deposit_fee<FT>(
+    token: &FeeToken<FT>,
+    balance: &Balance<FT>,
+    lock: &DepositLock<FT>,
+    policy: &FeeTokenPolicy<FT>,
+): u64 {
+    let amount = balance.value();
+    let mut fee: u64 = 0;
+
+    if (lock.include_fee && token.fee_mode == FEE_MODE_ON) {
+        policy.fees.keys().do_ref!(|receiver| {
+            let fee_amount = mul_div!(amount, *policy.fees.get(receiver), MAX_BPS);
+            fee = fee + fee_amount;
+        });
+    };
+
+    fee
+}
+
 public fun burn_balance_from_address<FT>(
     token: &mut FeeToken<FT>,
     currency: &mut Currency<FT>,
@@ -393,7 +422,7 @@ public fun burn_balance_from_address<FT>(
 
     let balance = token.balance.withdraw_all();
     let amount = balance.value();
-    currency.burn_balance(balance);    
+    currency.burn_balance(balance);
 
     event::emit(BurnBalanceFeeTokenEvent {
         token_type: type_name::with_defining_ids<FT>(),
@@ -401,7 +430,7 @@ public fun burn_balance_from_address<FT>(
         token_owner: token.owner,
         amount,
     });
-    
+
     amount
 }
 
@@ -414,7 +443,7 @@ public fun burn_balance_from_object<FT>(
 
     let balance = token.balance.withdraw_all();
     let amount = balance.value();
-    currency.burn_balance(balance);    
+    currency.burn_balance(balance);
 
     event::emit(BurnBalanceFeeTokenEvent {
         token_type: type_name::with_defining_ids<FT>(),
@@ -428,7 +457,7 @@ public fun burn_balance_from_object<FT>(
 
 public fun join_lock<FT>(lock: &mut DepositLock<FT>, other: DepositLock<FT>) {
     assert!(lock.include_fee == other.include_fee, EDepositLocksAreNotCompatible);
-    let DepositLock { amount, ..} = other;
+    let DepositLock { amount, .. } = other;
     lock.amount = lock.amount + amount;
 }
 
@@ -479,7 +508,12 @@ public fun create_fee_token_currency(ctx: &mut TxContext) {
     );
     unit_test::destroy(coin_registry);
 
-    let (mut initializer, mut policy, policy_fee_mode_cap, policy_fees_cap) = registry.init_fee_token_currency(
+    let (
+        mut initializer,
+        mut policy,
+        policy_fee_mode_cap,
+        policy_fees_cap,
+    ) = registry.init_fee_token_currency(
         currency_initializer,
         ctx,
     );

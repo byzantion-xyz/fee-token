@@ -55,7 +55,22 @@ The actual token object containing:
 - Token balance
 
 ### 8. DepositLock
-Ensures atomic deposit operations with proper fee calculations.
+Ensures atomic deposit operations with proper fee calculations. This is a hot-potato object (no abilities) that must be consumed within a single transaction.
+
+## Key Operations
+
+### Deposit & Withdraw
+- `withdraw_from_address` / `withdraw_from_object`: Withdraw tokens, returns balance and a deposit lock
+- `deposit`: Deposit tokens with automatic fee deduction
+- `calculate_deposit_fee`: Preview the fee amount before depositing
+
+### Burn
+- `burn_balance_from_address` / `burn_balance_from_object`: Burn tokens permanently
+
+### Fee Management
+- `add_fee` / `remove_fee`: Configure fee recipients and percentages
+- `withdraw_fee`: Fee recipients can claim their accumulated fees
+- `set_fee_mode`: Set fee mode for a token owner
 
 ## Fee Modes
 
@@ -73,11 +88,13 @@ The module supports three fee modes that control how fees are applied:
 - `ETreasuryCapSupplyIsNotZero` (2): Treasury cap must have zero supply before minting
 - `EAccessDenied` (3): Unauthorized access attempt
 - `EInvalidFeeMode` (4): Invalid fee mode
-- `EInvalidTotalFee` (5): Total fees exceed 100%
-- `EFeeTypeNotRegistered` (6): Fee type not registered
-- `ENotEnoughBalance` (7): Insufficient token balance
-- `EDepositLocksAreNotCompatible` (8): Deposit locks have incompatible fee settings
-- `EDepositLockAmountIsNotZero` (9): Lock must be fully consumed
+- `EInvalidReceiverFee` (5): Fee receiver percentage must be greater than zero
+- `EInvalidTotalFee` (6): Total fees exceed 100%
+- `EFeeTypeNotRegistered` (7): Fee type not registered
+- `ENotEnoughBalance` (8): Insufficient token balance
+- `EDepositAmountIsTooLow` (9): Deposit amount too small (fee would round to zero)
+- `EDepositLocksAreNotCompatible` (10): Deposit locks have incompatible fee settings
+- `EDepositLockAmountIsNotZero` (11): Lock must be fully consumed
 
 ## Events
 
@@ -85,6 +102,7 @@ The module emits the following events:
 - `NewFeeTokenEvent`: When a new token is created
 - `WithdrawFeeTokenEvent`: When tokens are withdrawn
 - `DepositFeeTokenEvent`: When tokens are deposited (includes fee amount)
+- `BurnBalanceFeeTokenEvent`: When tokens are burned
 
 ## Security Considerations
 
@@ -92,5 +110,7 @@ The module emits the following events:
 2. **Immutability Option**: Capabilities can be destroyed to make configuration immutable
 3. **Balance Protection**: Withdrawals require proper ownership verification
 4. **Fee Limits**: Total fees cannot exceed 100% (10000 basis points)
-5. **Atomic Operations**: Deposit locks ensure complete operations
+5. **Atomic Operations**: Deposit locks (hot-potato) ensure complete operations within a single transaction
 6. **Package Immutability**: For full immutability, make the package immutable after destroying caps
+7. **Minimum Deposit Amount**: Deposits must be large enough that each fee recipient receives at least 1 unit, preventing rounding exploits
+8. **Non-zero Fee Requirement**: Fee recipients must have a fee percentage greater than zero
