@@ -9,7 +9,7 @@ The Fee Token module provides a comprehensive system for creating and managing t
 - Automatic fee distribution to multiple recipients
 - Secure token management with access controls
 - Deposit/withdrawal operations with automatic fee deduction
-- Fee mode system to control fee behavior per account
+- Fee mode system to independently control incoming and outgoing fee behavior per account
 
 ## Features
 
@@ -18,7 +18,7 @@ The Fee Token module provides a comprehensive system for creating and managing t
 - **Lock mechanism**: Ensures proper handling of deposits and withdrawals with fee calculations
 - **Event emission**: Comprehensive event logging for all major operations
 - **Separated access control**: Separate capabilities for fee configuration and fee mode management
-- **Fee mode system**: Control fee behavior with three modes (ON, OFF, FORCE_OFF)
+- **Fee mode system**: Control fee behavior with four modes (ALL_ON, IN_OFF, OUT_OFF, ALL_OFF)
 
 ## Core Components
 
@@ -74,13 +74,14 @@ Ensures atomic deposit operations with proper fee calculations. This is a hot-po
 
 ## Fee Modes
 
-The module supports three fee modes that control how fees are applied:
+The module supports four fee modes that independently control incoming and outgoing fee behavior:
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `FEE_MODE_ON` | 0 | Fees enabled - charges on receive, allows fee on send |
-| `FEE_MODE_OFF` | 1 | Fees disabled for receiver - doesn't charge, allows fee on send |
-| `FEE_MODE_FORCE_OFF` | 2 | Force fees off - sender blocks all fees from being charged |
+| `FEE_MODE_ALL_ON` | 0 | Default - fees apply on both incoming and outgoing transfers |
+| `FEE_MODE_IN_OFF` | 1 | Incoming fees disabled - receiver opts out of paying fees |
+| `FEE_MODE_OUT_OFF` | 2 | Outgoing fees disabled - sender opts out of triggering fees |
+| `FEE_MODE_ALL_OFF` | 3 | All fees disabled - both incoming and outgoing fees off |
 
 ## Error Codes
 

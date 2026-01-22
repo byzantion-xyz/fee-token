@@ -8,15 +8,15 @@ use sui::derived_object;
 use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
-use sui::token::amount;
 use sui::vec_map::{Self, VecMap};
 
 // Constants
 const MAX_BPS: u16 = 10000;
 
-const FEE_MODE_ON: u64 = 0;
-const FEE_MODE_OFF: u64 = 1;
-const FEE_MODE_FORCE_OFF: u64 = 2;
+const FEE_MODE_ALL_ON: u64 = 0;
+const FEE_MODE_IN_OFF: u64 = 1;
+const FEE_MODE_OUT_OFF: u64 = 2;
+const FEE_MODE_ALL_OFF: u64 = 3;
 
 // Errors
 const EFeeTypeAlreadyRegistered: u64 = 1;
@@ -255,7 +255,7 @@ public fun new<FT>(
 
     let token = FeeToken<FT> {
         id,
-        fee_mode: FEE_MODE_ON,
+        fee_mode: FEE_MODE_ALL_ON,
         owner,
         balance: balance::zero(),
     };
@@ -284,13 +284,13 @@ public fun set_fee_mode<FT>(
     fee_mode: u64,
 ) {
     assert!(policy.id.to_inner() == cap.policy_id, EAccessDenied);
-    assert!(fee_mode <= FEE_MODE_FORCE_OFF, EInvalidFeeMode);
+    assert!(fee_mode <= FEE_MODE_ALL_OFF, EInvalidFeeMode);
 
     if (policy.fee_modes.contains(token.owner)) {
         policy.fee_modes.remove(token.owner);
     };
 
-    if (fee_mode >= FEE_MODE_OFF) {
+    if (fee_mode >= FEE_MODE_IN_OFF) {
         policy.fee_modes.add(token.owner, fee_mode);
     };
 
@@ -329,7 +329,7 @@ public fun withdraw_from_address<FT>(
     });
 
     let balance = token.balance.split(amount);
-    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < FEE_MODE_FORCE_OFF) };
+    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < FEE_MODE_OUT_OFF) };
 
     (balance, lock)
 }
@@ -350,7 +350,7 @@ public fun withdraw_from_object<FT>(
     });
 
     let balance = token.balance.split(amount);
-    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < FEE_MODE_FORCE_OFF) };
+    let lock = DepositLock<FT> { amount, include_fee: (token.fee_mode < FEE_MODE_OUT_OFF) };
 
     (balance, lock)
 }
@@ -365,14 +365,17 @@ public fun owner<FT>(token: &FeeToken<FT>): address {
 
 public fun assess_deposit_fee<FT>(
     token: &FeeToken<FT>,
-    amount: u64,    
+    amount: u64,
     is_gross: bool,
     lock: &DepositLock<FT>,
     policy: &FeeTokenPolicy<FT>,
-): u64 {    
-    if (lock.include_fee && token.fee_mode == FEE_MODE_ON) {
+): u64 {
+    let include_fee =
+        lock.include_fee && (token.fee_mode == FEE_MODE_ALL_ON || token.fee_mode == FEE_MODE_OUT_OFF);
+
+    if (include_fee) {
         let mut amount = amount;
-        
+
         if (!is_gross) {
             amount = mul_div!(amount, MAX_BPS, (MAX_BPS - policy.total_fee))
         };
@@ -392,7 +395,10 @@ public fun deposit<FT>(
     let amount = balance.value();
     let mut fee: u64 = 0;
 
-    if (lock.include_fee && token.fee_mode == FEE_MODE_ON) {
+    let include_fee =
+        lock.include_fee && (token.fee_mode == FEE_MODE_ALL_ON || token.fee_mode == FEE_MODE_OUT_OFF);
+
+    if (include_fee) {
         policy.fees.keys().do_ref!(|receiver| {
             let fee_amount = mul_div!(amount, *policy.fees.get(receiver), MAX_BPS);
             assert!(fee_amount > 0, EDepositAmountIsTooLow);
