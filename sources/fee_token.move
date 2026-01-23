@@ -379,7 +379,6 @@ public fun assess_deposit_fee<FT>(
         if (!is_gross) {
             amount = mul_div!(amount, MAX_BPS, (MAX_BPS - policy.total_fee))
         };
-
         mul_div!(amount, policy.total_fee, MAX_BPS)
     } else {
         0
@@ -401,7 +400,9 @@ public fun deposit<FT>(
     if (include_fee) {
         policy.fees.keys().do_ref!(|receiver| {
             let fee_amount = mul_div!(amount, *policy.fees.get(receiver), MAX_BPS);
-            assert!(fee_amount > 0, EDepositAmountIsTooLow);
+            if (lock.amount > 0) {
+                assert!(fee_amount > 0, EDepositAmountIsTooLow);
+            };
             fee = fee + fee_amount;
 
             let fee_balance = balance.split(fee_amount);
